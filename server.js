@@ -36,7 +36,7 @@ const cors = require("cors");
 const allowedOrigins = [
   "http://localhost:3000",
   "https://card-app-smoky.vercel.app",
-  "https://card-app-starter-sable.vercel.app/",
+  "https://card-app-starter-sable.vercel.app",
 ];
 
 app.use(
