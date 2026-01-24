@@ -26,10 +26,6 @@ const dbConfig = {
 // create ONE pool for the whole app (do this once)
 const pool = mysql.createPool(dbConfig);
 
-// start the server
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
 
 const cors = require("cors");
 
@@ -55,6 +51,7 @@ app.use(
     credentials: false,
   }),
 );
+
 
 // get all cards
 app.get("/allcards", async (req, res) => {
@@ -143,4 +140,10 @@ app.delete("/deletecard/:id", async (req, res) => {
       .status(500)
       .json({ error: "Internal Server Error for deleting a card" });
   }
+});
+
+
+// start the server
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
