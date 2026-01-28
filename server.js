@@ -3,6 +3,11 @@ const express = require("express");
 const mysql = require("mysql2/promise");
 require("dotenv").config();
 
+const DEMO_USER = { id: 1, username: "admin", password: "admin123" };
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+
+const jwt = require("jsonwebtoken");
+
 // initialize express app
 const app = express();
 app.use(express.json());
@@ -52,34 +57,62 @@ app.use(
   }),
 );
 
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization; // "Bearer <token>"
+  if (!header) return res.status(401).json({ error: "Missing Authorization header" });
 
-// get all cards
-app.get("/allcards", async (req, res) => {
+  const [type, token] = header.split(" ");
+  if (type !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Invalid Authorization format" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload; 
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid/Expired token" });
+  }
+}
+
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username !== DEMO_USER.username || password !== DEMO_USER.password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const token = jwt.sign(
+    { userId: DEMO_USER.id, username: DEMO_USER.username },
+    JWT_SECRET,
+    { expiresIn: "1h" }
+  );
+
+  res.json({ token });
+});
+
+
+// get all cards (protected)
+app.get("/allcards", requireAuth, async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM cards");
     res.json(rows);
   } catch (error) {
     console.error("Error fetching cards:", error);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error for getting all cards" });
+    res.status(500).json({ error: "Internal Server Error for getting all cards" });
   }
 });
 
-// add a new card
-app.post("/addcard", async (req, res) => {
+// add a new card (protected)
+app.post("/addcard", requireAuth, async (req, res) => {
   const { card_name, card_pic } = req.body;
-
-  if (!card_name || !card_pic) {
-    return res
-      .status(400)
-      .json({ error: "card_name and card_pic are required" });
-  }
+  if (!card_name || !card_pic)
+    return res.status(400).json({ error: "card_name and card_pic are required" });
 
   try {
     const [result] = await pool.query(
       "INSERT INTO cards (card_name, card_pic) VALUES (?, ?)",
-      [card_name, card_pic],
+      [card_name, card_pic]
     );
     res.status(201).json(result);
   } catch (error) {
@@ -88,59 +121,44 @@ app.post("/addcard", async (req, res) => {
   }
 });
 
-// update a card, week 10
-app.put("/updatecard/:id", async (req, res) => {
+// update card (protected)
+app.put("/updatecard/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
   const { card_name, card_pic } = req.body;
-
-  if (!card_name || !card_pic) {
-    return res
-      .status(400)
-      .json({ error: "card_name and card_pic are required" });
-  }
+  if (!card_name || !card_pic)
+    return res.status(400).json({ error: "card_name and card_pic are required" });
 
   try {
     const [result] = await pool.query(
       "UPDATE cards SET card_name = ?, card_pic = ? WHERE id = ?",
-      [card_name, card_pic, id],
+      [card_name, card_pic, id]
     );
-
-    if (result.affectedRows === 0) {
+    if (result.affectedRows === 0)
       return res.status(404).json({ error: "Card not found" });
-    }
 
-    res
-      .status(200)
-      .json({ message: "Card updated", affectedRows: result.affectedRows });
+    res.json({ message: "Card updated", affectedRows: result.affectedRows });
   } catch (error) {
     console.error("Error updating card:", error);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error for updating a card" });
+    res.status(500).json({ error: "Internal Server Error for updating a card" });
   }
 });
 
-// delete a card, week 10
-app.delete("/deletecard/:id", async (req, res) => {
+// delete card (protected)
+app.delete("/deletecard/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
   try {
     const [result] = await pool.query("DELETE FROM cards WHERE id = ?", [id]);
-
-    if (result.affectedRows === 0) {
+    if (result.affectedRows === 0)
       return res.status(404).json({ error: "Card not found" });
-    }
 
-    res
-      .status(200)
-      .json({ message: "Card deleted", affectedRows: result.affectedRows });
+    res.json({ message: "Card deleted", affectedRows: result.affectedRows });
   } catch (error) {
     console.error("Error deleting card:", error);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error for deleting a card" });
+    res.status(500).json({ error: "Internal Server Error for deleting a card" });
   }
 });
+        
 
 
 // start the server
